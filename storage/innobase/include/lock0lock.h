@@ -52,10 +52,18 @@ namespace Deadlock
   enum report { REPORT_OFF, REPORT_BASIC, REPORT_FULL };
 }
 
+/** Conflicting lock info */
 struct conflicting_lock_info {
+  /** Conflicting lock */
   lock_t *conflicting;
+  /** If some lock was bypassed, points to the lock after which bypassing
+  lock must be inserted into linked list of locks for the certain cell of
+  record locks hash table. */
   lock_t *insert_after;
+#ifdef UNIV_DEBUG
+  /** Bypassed lock */
   lock_t *bypassed;
+#endif
 };
 
 /*********************************************************************//**
@@ -1158,7 +1166,7 @@ void lock_rec_discard(lock_sys_t::hash_table &lock_hash, lock_t *in_lock);
 
 /** Create a new record lock and inserts it to the lock queue,
 without checking for deadlocks or conflicts.
-@param[in]	c_lock		conflicting lock, or NULL
+@param		c_lock_info	conflicting lock info
 @param[in]	type_mode	lock mode and wait flag
 @param[in]	page_id		index page number
 @param[in]	page		R-tree index page, or NULL
@@ -1180,7 +1188,7 @@ lock_rec_create_low(
 
 /** Enqueue a waiting request for a lock which cannot be granted immediately.
 Check for deadlocks.
-@param[in]	c_lock		conflicting lock
+@param		c_lock_info	conflicting lock info
 @param[in]	type_mode	the requested lock mode (LOCK_S or LOCK_X)
 				possibly ORed with LOCK_GAP or
 				LOCK_REC_NOT_GAP, ORed with
