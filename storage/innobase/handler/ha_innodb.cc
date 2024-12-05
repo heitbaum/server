@@ -17198,27 +17198,29 @@ innobase_xa_prepare(
 					ended */
 {
   trx_t *trx= check_trx_exists(thd);
-  if (UNIV_UNLIKELY(trx->state != TRX_STATE_ACTIVE))
-  {
+  ut_ad(trx_is_registered_for_2pc(trx));
+  if (!prepare_trx)
+    prepare_trx= !thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN);
+
+  switch (UNIV_EXPECT(trx->state, TRX_STATE_ACTIVE)) {
+  default:
     ut_ad("invalid state" == 0);
     return HA_ERR_GENERIC;
+  case TRX_STATE_NOT_STARTED:
+    if (prepare_trx)
+      trx_start_if_not_started_xa(trx, false);;
+    /* fall through */
+  case TRX_STATE_ACTIVE:
+    thd_get_xid(thd, &reinterpret_cast<MYSQL_XID&>(trx->xid));
+    if (prepare_trx)
+      trx_prepare_for_mysql(trx);
+    else
+    {
+      lock_unlock_table_autoinc(trx);
+      trx_mark_stmt_end(trx);
+    }
+    return 0;
   }
-
-  ut_ad(trx_is_registered_for_2pc(trx));
-  thd_get_xid(thd, &reinterpret_cast<MYSQL_XID&>(trx->xid));
-  if (prepare_trx ||
-      !thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN))
-    /* We were instructed to prepare the whole transaction, or
-    this is an SQL statement end and autocommit is on */
-    trx_prepare_for_mysql(trx);
-  else
-  {
-    /* We just mark the SQL statement ended and do not do a
-    transaction prepare */
-    lock_unlock_table_autoinc(trx);
-    trx_mark_stmt_end(trx);
-  }
-  return 0;
 }
 
 /*******************************************************************//**
