@@ -3040,10 +3040,12 @@ static int innobase_close_connection(handlerton *, THD *thd) noexcept
       ut_ad("invalid state" == 0);
       return 0;
     case TRX_STATE_PREPARED:
-      if (!trx->has_logged_persistent())
-        break;
-      trx_disconnect_prepared(trx);
-      return 0;
+      if (trx->has_logged_persistent())
+      {
+        trx_disconnect_prepared(trx);
+        return 0;
+      }
+      /* fall through */
     case TRX_STATE_ACTIVE:
       /* If we had reserved the auto-inc lock for some table (if
       we come here to roll back the latest SQL statement) we
@@ -4662,7 +4664,8 @@ innobase_commit_ordered(
 /** Marks the latest SQL statement ended. */
 static void trx_mark_stmt_end(trx_t *trx) noexcept
 {
-  ut_ad(trx->state == TRX_STATE_ACTIVE);
+  ut_d(const trx_state_t trx_state{trx->state});
+  ut_ad(trx_state == TRX_STATE_ACTIVE || trx_state == TRX_STATE_NOT_STARTED);
   if (trx->fts_trx)
     fts_savepoint_laststmt_refresh(trx);
   if (trx->is_bulk_insert())
